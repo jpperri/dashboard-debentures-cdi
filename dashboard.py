@@ -23,6 +23,10 @@ def load_data():
 
 df = load_data()
 
+# Detecta tema do sistema (light/dark)
+is_dark = st.get_option("theme.base") == "dark"
+interpol_color = "white" if is_dark else "black"
+
 st.title("📊 Dashboard Interativo — Debêntures CDI+")
 
 tab1, tab2, tab3 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial"])
@@ -96,7 +100,7 @@ with tab2:
     st.subheader("🏦 Curva do Emissor Selecionado")
     emissor_sel = st.selectbox("🔎 Selecione um Emissor", sorted(df["Emissor"].dropna().unique()))
     df_emissor = df[df["Emissor"] == emissor_sel].dropna(subset=["Duration", "Spread_bps"])
-    
+
     if df_emissor.empty or len(df_emissor) < 2:
         st.warning("Este emissor não possui dados suficientes para visualização.")
     else:
@@ -130,7 +134,7 @@ with tab2:
                 y=y_model,
                 mode="lines",
                 name="Curva Interpolada",
-                line=dict(color='black', dash='dash')
+                line=dict(color=interpol_color, dash='dash')
             ))
         except Exception:
             st.info("⚠️ Curva não ajustada — verifique dispersão dos dados.")
@@ -147,11 +151,29 @@ with tab2:
 # === SETORIAL ===
 with tab3:
     st.subheader("📊 Média de Spread por Setor")
-    spread_por_setor = df.groupby("Setor")["ANBIMA_pct"].mean().reset_index().sort_values("ANBIMA_pct", ascending=False)
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.dataframe(spread_por_setor.rename(columns={"ANBIMA_pct": "Spread Médio (%)"}), use_container_width=True)
-    with col2:
-        fig_bar = px.bar(spread_por_setor, x="ANBIMA_pct", y="Setor", orientation="h",
-                         labels={"ANBIMA_pct": "Spread Médio (%)"}, title="Spread Médio por Setor")
-        st.plotly_chart(fig_bar, use_container_width=True)
+
+    spread_por_setor = (
+        df.groupby("Setor")["ANBIMA_pct"]
+        .mean()
+        .reset_index()
+        .sort_values("ANBIMA_pct", ascending=False)
+    )
+
+    st.markdown("### 📋 Tabela")
+    st.dataframe(
+        spread_por_setor.rename(columns={"ANBIMA_pct": "Spread Médio (%)"}),
+        use_container_width=True,
+        height=600
+    )
+
+    st.markdown("### 📈 Gráfico de Barras")
+    fig_bar = px.bar(
+        spread_por_setor,
+        x="ANBIMA_pct",
+        y="Setor",
+        orientation="h",
+        labels={"ANBIMA_pct": "Spread Médio (%)"},
+        title="Spread Médio por Setor",
+        height=800
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
