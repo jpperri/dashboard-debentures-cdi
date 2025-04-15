@@ -10,7 +10,7 @@ import io
 st.set_page_config(page_title="REAG Crédito - Monitor de Debêntures CDI+", layout="wide")
 
 # === Cabeçalho visual ===
-image = Image.open("Cabecalho de relatorios.png")  # Caminho relativo
+image = Image.open("logopage.png")  # Caminho relativo
 st.image(image, use_column_width=True)
 
 @st.cache_data
