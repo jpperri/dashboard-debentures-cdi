@@ -222,3 +222,4 @@ with tab4:
         data=pdf_buffer.getvalue(),
         file_name="Relatorio_Executivo_REAG.pdf",
         mime="application/pdf"
+    )
