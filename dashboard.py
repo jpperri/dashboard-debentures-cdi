@@ -14,13 +14,12 @@ def load_data():
     df["OFFER_pct"] = df["OFFER"] * 100
     df["ANBIMA_pct"] = df["ANBIMA"] * 100
     df["Setor"] = df["Setor"].fillna("Não informado")
-    df["Vencimento"] = pd.to_datetime(df["Vencimento"], errors="coerce")
+    df["Vencimento"] = pd.to_datetime(df["Vencimento"], dayfirst=True, errors="coerce")
     df["Ano_Venc"] = df["Vencimento"].dt.year
     return df
 
 df = load_data()
 
-# Título
 st.title("📊 Dashboard Interativo — Debêntures CDI+")
 
 # KPIs
@@ -32,17 +31,15 @@ col4.metric("📅 Último Vencimento", df["Vencimento"].max().strftime("%d/%m/%Y
 
 st.markdown("---")
 
-# Filtros com reset
+# Filtros
 st.subheader("🎛 Filtros")
-
 col1, col2, col3 = st.columns([3, 3, 1])
 
 with col1:
-    setores_unicos = sorted(df["Setor"].dropna().unique())
-    setores_filtro = st.multiselect("Setor", options=setores_unicos, default=[])
+    setores_filtro = st.multiselect("Setor", options=sorted(df["Setor"].dropna().unique()), default=[])
+
 with col2:
-    anos_venc = sorted(df["Ano_Venc"].dropna().unique())
-    anos_filtro = st.multiselect("Ano de Vencimento", options=anos_venc, default=[])
+    anos_filtro = st.multiselect("Ano de Vencimento", options=sorted(df["Ano_Venc"].dropna().unique()), default=[])
 
 with col3:
     if st.button("🔄 Resetar filtros"):
@@ -74,40 +71,32 @@ else:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Top 10 maiores e menores spreads
+# Tabelas - Top 10 maiores e menores spreads
+def preparar_tabela(df_input):
+    df_show = df_input.copy()
+    df_show["Vencimento"] = df_show["Vencimento"].dt.strftime("%d/%m/%Y")
+    df_show["BID"] = df_show["BID_pct"].map("{:.2f}%".format)
+    df_show["OFFER"] = df_show["OFFER_pct"].map("{:.2f}%".format)
+    df_show["ANBIMA"] = df_show["ANBIMA_pct"].map("{:.2f}%".format)
+    return df_show[["Código", "Emissor", "Setor", "Duration", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]]
+
 st.subheader("🏆 Top 10 maiores spreads")
-top_maiores = df_filt.sort_values("Spread_bps", ascending=False).head(10)
-top_maiores["Vencimento"] = top_maiores["Vencimento"].dt.strftime("%d/%m/%Y")
-top_maiores["BID"] = top_maiores["BID_pct"].map("{:.2f}%".format)
-top_maiores["OFFER"] = top_maiores["OFFER_pct"].map("{:.2f}%".format)
-top_maiores["ANBIMA"] = top_maiores["ANBIMA_pct"].map("{:.2f}%".format)
-st.dataframe(top_maiores[["Código", "Emissor", "Setor", "Duration", "Spread_bps", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]])
+top_maiores = df_filt.sort_values("ANBIMA_pct", ascending=False).head(10)
+st.data_editor(preparar_tabela(top_maiores), use_container_width=True, hide_index=True, column_config={
+    "Emissor": st.column_config.TextColumn(width="medium")
+})
 
 st.subheader("📉 Top 10 menores spreads")
-top_menores = df_filt.sort_values("Spread_bps", ascending=True).head(10)
-top_menores["Vencimento"] = top_menores["Vencimento"].dt.strftime("%d/%m/%Y")
-top_menores["BID"] = top_menores["BID_pct"].map("{:.2f}%".format)
-top_menores["OFFER"] = top_menores["OFFER_pct"].map("{:.2f}%".format)
-top_menores["ANBIMA"] = top_menores["ANBIMA_pct"].map("{:.2f}%".format)
-st.dataframe(top_menores[["Código", "Emissor", "Setor", "Duration", "Spread_bps", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]])
+top_menores = df_filt.sort_values("ANBIMA_pct", ascending=True).head(10)
+st.data_editor(preparar_tabela(top_menores), use_container_width=True, hide_index=True, column_config={
+    "Emissor": st.column_config.TextColumn(width="medium")
+})
 
-# Concentração por emissor
-st.subheader("🏢 Top 5 Emissores por Quantidade")
-top_emissores = df_filt["Emissor"].value_counts().head(5)
-st.bar_chart(top_emissores)
-
-# Tabela final com download
+# Tabela final + download
 st.subheader("📋 Tabela de Debêntures Filtradas")
-df_filt_display = df_filt.copy()
-df_filt_display["Vencimento"] = df_filt_display["Vencimento"].dt.strftime("%d/%m/%Y")
-df_filt_display["BID"] = df_filt_display["BID_pct"].map("{:.2f}%".format)
-df_filt_display["OFFER"] = df_filt_display["OFFER_pct"].map("{:.2f}%".format)
-df_filt_display["ANBIMA"] = df_filt_display["ANBIMA_pct"].map("{:.2f}%".format)
-
-st.dataframe(
-    df_filt_display[["Código", "Emissor", "Setor", "Duration", "Spread_bps", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]],
-    use_container_width=True
-)
+st.data_editor(preparar_tabela(df_filt), use_container_width=True, hide_index=True, column_config={
+    "Emissor": st.column_config.TextColumn(width="medium")
+})
 
 csv = df_filt.to_csv(index=False).encode('utf-8')
 st.download_button("📥 Baixar CSV com dados filtrados", data=csv, file_name="debentures_filtradas.csv", mime='text/csv')
