@@ -181,10 +181,12 @@ with tab3:
         height=800
     )
     st.plotly_chart(fig_bar, use_container_width=True)
+from fpdf import FPDF
+
+# ABA: RELATÓRIO EXECUTIVO
 with tab4:
     st.header("📄 Relatório Executivo - Visão Geral")
 
-    pdf_buffer = io.BytesIO()
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
@@ -215,11 +217,12 @@ with tab4:
     for _, row in top3_menores.iterrows():
         pdf.cell(0, 10, f"{row['Código']} - {row['Emissor']} - {row['Spread_bps']:.0f} bps", ln=True)
 
-    # Geração
-    pdf.output(pdf_buffer)
+    # Geração como string e encode para bytes
+    pdf_bytes = pdf.output(dest='S').encode('latin1')
+
     st.download_button(
         label="📥 Baixar Relatório PDF",
-        data=pdf_buffer.getvalue(),
+        data=pdf_bytes,
         file_name="Relatorio_Executivo_REAG.pdf",
         mime="application/pdf"
     )
