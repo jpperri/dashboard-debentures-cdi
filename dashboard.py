@@ -11,7 +11,8 @@ st.set_page_config(page_title="REAG Crédito - Monitor de Debêntures CDI+", lay
 
 # === Cabeçalho visual ===
 image = Image.open("logopage.png")  # Caminho relativo
-st.image(image, use_column_width=True)
+st.image(image, use_container_width=True)
+
 
 @st.cache_data
 def load_data():
