@@ -36,8 +36,7 @@ interpol_color = "white" if is_dark else "black"
 
 st.title("📊 REAG Crédito - Monitor de Debêntures CDI+")
 
-import matplotlib.pyplot as plt
-from pdfdocument.document import PDFDocument
+from fpdf import FPDF
 
 tab1, tab2, tab3, tab4 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial", "📄 Relatório Executivo"])
 
@@ -185,45 +184,41 @@ with tab3:
 with tab4:
     st.header("📄 Relatório Executivo - Visão Geral")
 
-    buffer = io.BytesIO()
-    pdf = PDFDocument(buffer)
-    pdf.init_report()
-
-    pdf.h1("REAG Crédito - Monitor de Debêntures CDI+")
-    pdf.hr()
+    pdf_buffer = io.BytesIO()
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, "REAG Crédito - Monitor de Debêntures CDI+", ln=True, align="C")
+    pdf.set_font("Arial", "", 12)
+    pdf.ln(10)
 
     # Estatísticas
-    pdf.h2("Estatísticas Gerais")
-    pdf.p(f"Total de Debêntures: {len(df)}")
-    pdf.p(f"Spread Médio: {df['Spread_bps'].mean():.1f} bps")
-    pdf.p(f"Duration Média: {df['Duration'].mean():.2f} anos")
-    pdf.p(f"Último Vencimento: {df['Vencimento'].max().strftime('%d/%m/%Y')}")
+    pdf.cell(0, 10, f"Total de Debêntures: {len(df)}", ln=True)
+    pdf.cell(0, 10, f"Spread Médio: {df['Spread_bps'].mean():.1f} bps", ln=True)
+    pdf.cell(0, 10, f"Duration Média: {df['Duration'].mean():.2f} anos", ln=True)
+    pdf.cell(0, 10, f"Último Vencimento: {df['Vencimento'].max().strftime('%d/%m/%Y')}", ln=True)
+    pdf.ln(5)
 
     # Top 3
-    pdf.h2("Top 3 Maiores Spreads")
-    for _, row in df.sort_values("Spread_bps", ascending=False).head(3).iterrows():
-        pdf.p(f"{row['Código']} - {row['Emissor']} - {row['Spread_bps']:.0f} bps")
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Top 3 Maiores Spreads", ln=True)
+    pdf.set_font("Arial", "", 12)
+    top3_maiores = df.sort_values("Spread_bps", ascending=False).head(3)
+    for _, row in top3_maiores.iterrows():
+        pdf.cell(0, 10, f"{row['Código']} - {row['Emissor']} - {row['Spread_bps']:.0f} bps", ln=True)
+    pdf.ln(5)
 
-    pdf.h2("Top 3 Menores Spreads")
-    for _, row in df.sort_values("Spread_bps", ascending=True).head(3).iterrows():
-        pdf.p(f"{row['Código']} - {row['Emissor']} - {row['Spread_bps']:.0f} bps")
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Top 3 Menores Spreads", ln=True)
+    pdf.set_font("Arial", "", 12)
+    top3_menores = df.sort_values("Spread_bps", ascending=True).head(3)
+    for _, row in top3_menores.iterrows():
+        pdf.cell(0, 10, f"{row['Código']} - {row['Emissor']} - {row['Spread_bps']:.0f} bps", ln=True)
 
-    # Gráfico resumido
-    pdf.h2("Gráfico de Dispersão")
-    fig, ax = plt.subplots(figsize=(6, 4))
-    sample = df.dropna(subset=["Duration", "Spread_bps"])
-    ax.scatter(sample["Duration"], sample["Spread_bps"], alpha=0.6)
-    ax.set_title("Spread vs Duration")
-    ax.set_xlabel("Duration (anos)")
-    ax.set_ylabel("Spread (bps)")
-    pdf.figure(fig)
-    plt.close(fig)
-
-    pdf.generate()
-
+    # Geração
+    pdf.output(pdf_buffer)
     st.download_button(
-        label="📄 Baixar Relatório PDF",
-        data=buffer.getvalue(),
+        label="📥 Baixar Relatório PDF",
+        data=pdf_buffer.getvalue(),
         file_name="Relatorio_Executivo_REAG.pdf",
         mime="application/pdf"
-    )
