@@ -20,9 +20,9 @@ def load_data():
 
 df = load_data()
 
+# Título e KPIs
 st.title("📊 Dashboard Interativo — Debêntures CDI+")
 
-# KPIs
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("📄 Debêntures", len(df))
 col2.metric("📈 Spread Médio", f"{df['Spread_bps'].mean():.1f} bps")
@@ -53,7 +53,7 @@ if setores_filtro:
 if anos_filtro:
     df_filt = df_filt[df_filt["Ano_Venc"].isin(anos_filtro)]
 
-# Gráfico
+# Gráfico Scatter Ampliado
 st.subheader("📈 Spread ANBIMA (bps) vs Duration")
 df_plot = df_filt.dropna(subset=["Duration", "Spread_bps", "Setor"])
 
@@ -67,11 +67,12 @@ else:
         color="Setor",
         hover_data=["Código", "Emissor", "PU", "Vencimento"],
         title="Spread ANBIMA vs Duration",
-        labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"}
+        labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"},
+        height=800
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Tabelas - Top 10 maiores e menores spreads
+# Função de formatação das tabelas
 def preparar_tabela(df_input):
     df_show = df_input.copy()
     df_show["Vencimento"] = df_show["Vencimento"].dt.strftime("%d/%m/%Y")
@@ -80,23 +81,20 @@ def preparar_tabela(df_input):
     df_show["ANBIMA"] = df_show["ANBIMA_pct"].map("{:.2f}%".format)
     return df_show[["Código", "Emissor", "Setor", "Duration", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]]
 
+# Tabelas com autoajuste visual
 st.subheader("🏆 Top 10 maiores spreads")
 top_maiores = df_filt.sort_values("ANBIMA_pct", ascending=False).head(10)
-st.data_editor(preparar_tabela(top_maiores), use_container_width=True, hide_index=True, column_config={
-    "Emissor": st.column_config.TextColumn(width="medium")
-})
+st.dataframe(preparar_tabela(top_maiores), use_container_width=True)
 
 st.subheader("📉 Top 10 menores spreads")
 top_menores = df_filt.sort_values("ANBIMA_pct", ascending=True).head(10)
-st.data_editor(preparar_tabela(top_menores), use_container_width=True, hide_index=True, column_config={
-    "Emissor": st.column_config.TextColumn(width="medium")
-})
+st.dataframe(preparar_tabela(top_menores), use_container_width=True)
 
-# Tabela final + download
+# Tabela geral ordenada por vencimento
 st.subheader("📋 Tabela de Debêntures Filtradas")
-st.data_editor(preparar_tabela(df_filt), use_container_width=True, hide_index=True, column_config={
-    "Emissor": st.column_config.TextColumn(width="medium")
-})
+df_filt_ord = df_filt.sort_values("Vencimento")
+st.dataframe(preparar_tabela(df_filt_ord), use_container_width=True)
 
+# Exportação CSV
 csv = df_filt.to_csv(index=False).encode('utf-8')
 st.download_button("📥 Baixar CSV com dados filtrados", data=csv, file_name="debentures_filtradas.csv", mime='text/csv')
