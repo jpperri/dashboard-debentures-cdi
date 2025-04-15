@@ -25,7 +25,7 @@ df = load_data()
 
 st.title("📊 Dashboard Interativo — Debêntures CDI+")
 
-# --- KPIs ---
+# KPIs
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("📄 Debêntures", len(df))
 col2.metric("📈 Spread Médio", f"{df['Spread_bps'].mean():.1f} bps")
@@ -34,16 +34,13 @@ col4.metric("📅 Último Vencimento", df["Vencimento"].max().strftime("%d/%m/%Y
 
 st.markdown("---")
 
-# --- Filtros ---
+# Filtros
 st.subheader("🎛 Filtros")
 col1, col2, col3 = st.columns([3, 3, 1])
-
 with col1:
     setores_filtro = st.multiselect("Setor", options=sorted(df["Setor"].dropna().unique()), default=[])
-
 with col2:
     anos_filtro = st.multiselect("Ano de Vencimento", options=sorted(df["Ano_Venc"].dropna().unique()), default=[])
-
 with col3:
     if st.button("🔄 Resetar filtros"):
         setores_filtro = []
@@ -55,10 +52,9 @@ if setores_filtro:
 if anos_filtro:
     df_filt = df_filt[df_filt["Ano_Venc"].isin(anos_filtro)]
 
-# --- Gráfico principal ---
+# Gráfico principal
 st.subheader("📈 Spread ANBIMA (bps) vs Duration")
 df_plot = df_filt.dropna(subset=["Duration", "Spread_bps", "Setor"])
-
 if df_plot.empty:
     st.warning("⚠️ Nenhum dado disponível para o gráfico com os filtros atuais.")
 else:
@@ -74,7 +70,7 @@ else:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# --- Função para formatar tabelas ---
+# Função para formatar tabelas
 def preparar_tabela(df_input):
     df_show = df_input.copy()
     df_show["Vencimento"] = df_show["Vencimento"].dt.strftime("%d/%m/%Y")
@@ -83,7 +79,7 @@ def preparar_tabela(df_input):
     df_show["ANBIMA"] = df_show["ANBIMA_pct"].map("{:.2f}%".format)
     return df_show[["Código", "Emissor", "Setor", "Duration", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]]
 
-# --- Tabelas principais ---
+# Tabelas
 st.subheader("🏆 Top 10 maiores spreads")
 top_maiores = df_filt.sort_values("ANBIMA_pct", ascending=False).head(10)
 st.dataframe(preparar_tabela(top_maiores), use_container_width=True)
@@ -96,14 +92,13 @@ st.subheader("📋 Tabela de Debêntures Filtradas")
 df_filt_ord = df_filt.sort_values("Vencimento")
 st.dataframe(preparar_tabela(df_filt_ord), use_container_width=True)
 
-# --- Download ---
+# Exportação CSV
 csv = df_filt.to_csv(index=False).encode('utf-8')
 st.download_button("📥 Baixar CSV com dados filtrados", data=csv, file_name="debentures_filtradas.csv", mime='text/csv')
 
-# --- Média de Spread por Setor ---
+# Média de spread por setor
 st.markdown("## 🧮 Média de Spread por Setor")
 spread_por_setor = df.groupby("Setor")["ANBIMA_pct"].mean().reset_index().sort_values("ANBIMA_pct", ascending=False)
-
 col1, col2 = st.columns([1, 2])
 with col1:
     st.dataframe(spread_por_setor.rename(columns={"ANBIMA_pct": "Spread Médio (%)"}), use_container_width=True)
@@ -112,47 +107,50 @@ with col2:
                      labels={"ANBIMA_pct": "Spread Médio (%)"}, title="Spread Médio por Setor")
     st.plotly_chart(fig_bar, use_container_width=True)
 
-# --- Visão por Emissor ---
-st.markdown("## 🏦 Títulos do Emissor por Vencimento")
+# Curva por emissor + interpolação
+st.markdown("## 🏦 Curva do Emissor Selecionado")
 emissor_sel = st.selectbox("🔎 Selecione um Emissor", sorted(df["Emissor"].dropna().unique()))
-df_emissor = df[df["Emissor"] == emissor_sel].dropna(subset=["Duration", "Spread_bps", "Vencimento"])
-
+df_emissor = df[df["Emissor"] == emissor_sel].dropna(subset=["Duration", "Spread_bps"])
 if df_emissor.empty:
     st.warning("Este emissor não possui dados suficientes para visualização.")
 else:
-    df_emissor = df_emissor.sort_values("Vencimento")
-    fig_curve = px.scatter(
-        df_emissor,
-        x="Vencimento",
-        y="Spread_bps",
-        text="Código",
-        title=f"Títulos do Emissor: {emissor_sel}",
-        labels={"Spread_bps": "Spread (bps)", "Vencimento": "Vencimento"},
-        height=500
-    )
-    fig_curve.update_traces(mode="markers+text", textposition="top center")
-    st.plotly_chart(fig_curve, use_container_width=True)
-
-    # --- Curva Interpolada ---
-    st.markdown("## 📈 Curva Teórica Interpolada do Emissor")
-
+    df_emissor = df_emissor.sort_values("Duration")
+    fig = go.Figure()
+    symbols = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down',
+               'star', 'hexagram', 'hourglass', 'bowtie', 'pentagon']
+    for i, (index, row) in enumerate(df_emissor.iterrows()):
+        fig.add_trace(go.Scatter(
+            x=[row["Duration"]],
+            y=[row["Spread_bps"]],
+            mode="markers+text",
+            marker_symbol=symbols[i % len(symbols)],
+            marker=dict(size=12),
+            text=[row["Código"]],
+            name=row["Código"],
+            textposition="top center"
+        ))
     def curva_exp(x, a, b, c):
         return a * np.exp(-b * x) + c
-
     try:
         durations = df_emissor["Duration"].values
         spreads = df_emissor["Spread_bps"].values
         popt, _ = curve_fit(curva_exp, durations, spreads, maxfev=5000)
-
         x_model = np.linspace(min(durations), max(durations), 100)
         y_model = curva_exp(x_model, *popt)
-
-        fig_fit = go.Figure()
-        fig_fit.add_trace(go.Scatter(x=durations, y=spreads, mode='markers+text',
-                                     name='Títulos', text=df_emissor["Código"], textposition="top center"))
-        fig_fit.add_trace(go.Scatter(x=x_model, y=y_model, mode='lines', name='Curva Interpolada'))
-        fig_fit.update_layout(title=f"Curva Ajustada - {emissor_sel}",
-                              xaxis_title="Duration (anos)", yaxis_title="Spread (bps)", height=600)
-        st.plotly_chart(fig_fit, use_container_width=True)
-    except Exception as e:
-        st.error(f"Erro ao ajustar curva: {e}")
+        fig.add_trace(go.Scatter(
+            x=x_model,
+            y=y_model,
+            mode="lines",
+            name="Curva Interpolada",
+            line=dict(color='black', dash='dash')
+        ))
+    except Exception:
+        pass
+    fig.update_layout(
+        title=f"Curva do Emissor: {emissor_sel}",
+        xaxis_title="Duration (anos)",
+        yaxis_title="Spread (bps)",
+        height=600,
+        legend_title="Código"
+    )
+    st.plotly_chart(fig, use_container_width=True)
