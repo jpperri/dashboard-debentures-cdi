@@ -6,14 +6,16 @@ import numpy as np
 from scipy.optimize import curve_fit
 from PIL import Image
 import io
+import base64
 
 st.set_page_config(page_title="REAG Crédito - Monitor de Debêntures CDI+", layout="wide")
 
-# === Cabeçalho visual ===
-image = Image.open("logopage.png")  # Caminho relativo
-st.image(image, use_container_width=True)
+# === Cabeçalho visual com redimensionamento ===
+image = Image.open("Cabecalho de relatorios.png")
+resized_image = image.resize((image.width // 2, image.height // 2))
+st.image(resized_image, use_container_width=True)
 
-
+# === Carregamento de dados ===
 @st.cache_data
 def load_data():
     df = pd.read_excel("Deb CDI+.xlsx", engine="openpyxl")
@@ -34,8 +36,9 @@ interpol_color = "white" if is_dark else "black"
 
 st.title("📊 REAG Crédito - Monitor de Debêntures CDI+")
 
-tab1, tab2, tab3, tab4 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial", "📤 Exportar Relatórios"])
+tab1, tab2, tab3 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial"])
 
+# === Funções utilitárias ===
 def preparar_tabela(df_input):
     df_show = df_input.copy()
     df_show["Vencimento"] = df_show["Vencimento"].dt.strftime("%d/%m/%Y")
@@ -44,15 +47,15 @@ def preparar_tabela(df_input):
     df_show["ANBIMA"] = df_show["ANBIMA_pct"].map("{:.2f}%".format)
     return df_show[["Código", "Emissor", "Setor", "Duration", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]]
 
+def export_plot_as_png(fig, filename):
+    png_bytes = fig.to_image(format="png")
+    b64 = base64.b64encode(png_bytes).decode()
+    st.markdown(f"📷 [Baixar gráfico como PNG]("
+                f"data:image/png;base64,{b64})", unsafe_allow_html=True)
+
 # === VISÃO GERAL ===
 with tab1:
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("📄 Debêntures", len(df))
-    col2.metric("📈 Spread Médio", f"{df['Spread_bps'].mean():.1f} bps")
-    col3.metric("⏳ Duration Média", f"{df['Duration'].mean():.2f} anos")
-    col4.metric("📅 Último Vencimento", df["Vencimento"].max().strftime("%d/%m/%Y") if pd.notnull(df["Vencimento"].max()) else "-")
-
-    st.markdown("---")
+    st.header("📈 Visão Geral")
 
     setores_filtro = st.multiselect("Setor", options=sorted(df["Setor"].dropna().unique()), default=[])
     anos_filtro = st.multiselect("Ano de Vencimento", options=sorted(df["Ano_Venc"].dropna().unique()), default=[])
@@ -63,7 +66,7 @@ with tab1:
     if anos_filtro:
         df_filt = df_filt[df_filt["Ano_Venc"].isin(anos_filtro)]
 
-    st.subheader("📈 Spread ANBIMA (bps) vs Duration")
+    st.subheader("Gráfico de Spread vs Duration")
     df_plot = df_filt.dropna(subset=["Duration", "Spread_bps", "Setor"])
     fig = px.scatter(
         df_plot,
@@ -71,24 +74,26 @@ with tab1:
         y="Spread_bps",
         color="Setor",
         hover_data=["Código", "Emissor", "PU", "Vencimento"],
-        title="Spread ANBIMA vs Duration",
         labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"},
         height=800
     )
     st.plotly_chart(fig, use_container_width=True)
+    export_plot_as_png(fig, "grafico_geral")
 
-    st.subheader("📋 Tabela Completa de Debêntures")
+    st.subheader("📋 Tabela de Debêntures")
     tabela_geral = preparar_tabela(df_filt.sort_values("Vencimento"))
     st.dataframe(tabela_geral, use_container_width=True)
 
 # === EMISSORES ===
 with tab2:
-    st.subheader("🏦 Curva do Emissor Selecionado")
+    st.header("🏦 Curva por Emissor")
+
     emissores = sorted(df["Emissor"].dropna().unique())
-    default_index = emissores.index("Localiza") if "Localiza" in emissores else 0
-    emissor_sel = st.selectbox("🔎 Selecione um Emissor", emissores, index=default_index)
+    localiza_index = next((i for i, e in enumerate(emissores) if "Localiza Rent" in e), 0)
+    emissor_sel = st.selectbox("Selecione o emissor", emissores, index=localiza_index)
 
     df_emissor = df[df["Emissor"] == emissor_sel].dropna(subset=["Duration", "Spread_bps"]).sort_values("Duration")
+
     fig_emissor = go.Figure()
     symbols = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down',
                'star', 'hexagram', 'hourglass', 'bowtie', 'pentagon']
@@ -121,20 +126,21 @@ with tab2:
             line=dict(color=interpol_color, dash='dash')
         ))
     except Exception:
-        st.info("⚠️ Curva não ajustada — verifique dispersão dos dados.")
+        st.info("⚠️ Curva não ajustada — dados insuficientes.")
 
     fig_emissor.update_layout(
         title=f"Curva do Emissor: {emissor_sel}",
         xaxis_title="Duration (anos)",
         yaxis_title="Spread (bps)",
-        height=600,
-        legend_title="Código"
+        height=600
     )
     st.plotly_chart(fig_emissor, use_container_width=True)
+    export_plot_as_png(fig_emissor, "grafico_emissor")
 
 # === SETORIAL ===
 with tab3:
-    st.subheader("📊 Média de Spread por Setor")
+    st.header("🏭 Média de Spread por Setor")
+
     spread_por_setor = (
         df.groupby("Setor")["ANBIMA_pct"]
         .mean()
@@ -152,34 +158,4 @@ with tab3:
         height=800
     )
     st.plotly_chart(fig_bar, use_container_width=True)
-
-# === EXPORTAÇÃO ===
-with tab4:
-    st.subheader("📤 Exportar Visões")
-
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Base Completa')
-        preparar_tabela(df).to_excel(writer, index=False, sheet_name='Formatado')
-        spread_por_setor.to_excel(writer, index=False, sheet_name='Setorial')
-        df[df["Emissor"] == emissor_sel].to_excel(writer, index=False, sheet_name='Emissor')
-        writer.close()
-
-    st.download_button(
-        label="📊 Baixar Excel Completo",
-        data=buffer,
-        file_name="reag_monitor_debentures.xlsx",
-        mime="application/vnd.ms-excel"
-    )
-
-    st.download_button("📷 Baixar Gráfico Emissor (PNG)",
-                       data=fig_emissor.to_image(format="png"),
-                       file_name="grafico_emissor.png")
-
-    st.download_button("📷 Baixar Gráfico Setorial (PNG)",
-                       data=fig_bar.to_image(format="png"),
-                       file_name="grafico_setorial.png")
-
-    st.download_button("📷 Baixar Gráfico Geral (PNG)",
-                       data=fig.to_image(format="png"),
-                       file_name="grafico_geral.png")
+    export_plot_as_png(fig_bar, "grafico_setorial")
