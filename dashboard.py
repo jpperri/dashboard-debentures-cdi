@@ -4,8 +4,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from scipy.optimize import curve_fit
+from PIL import Image
+import io
 
-st.set_page_config(page_title="Debêntures CDI+", layout="wide")
+st.set_page_config(page_title="REAG Crédito - Monitor de Debêntures CDI+", layout="wide")
+
+# === Cabeçalho visual ===
+image = Image.open("assets/Cabecalho de relatorios.png")  # Caminho relativo
+st.image(image, use_column_width=True)
 
 @st.cache_data
 def load_data():
@@ -22,14 +28,12 @@ def load_data():
     return df
 
 df = load_data()
-
-# Detecta tema do sistema (light/dark)
 is_dark = st.get_option("theme.base") == "dark"
 interpol_color = "white" if is_dark else "black"
 
-st.title("📊 Dashboard Interativo — Debêntures CDI+")
+st.title("📊 REAG Crédito - Monitor de Debêntures CDI+")
 
-tab1, tab2, tab3 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial"])
+tab1, tab2, tab3, tab4 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial", "📤 Exportar Relatórios"])
 
 def preparar_tabela(df_input):
     df_show = df_input.copy()
@@ -49,16 +53,8 @@ with tab1:
 
     st.markdown("---")
 
-    st.subheader("🎛 Filtros")
-    col1, col2, col3 = st.columns([3, 3, 1])
-    with col1:
-        setores_filtro = st.multiselect("Setor", options=sorted(df["Setor"].dropna().unique()), default=[])
-    with col2:
-        anos_filtro = st.multiselect("Ano de Vencimento", options=sorted(df["Ano_Venc"].dropna().unique()), default=[])
-    with col3:
-        if st.button("🔄 Resetar filtros"):
-            setores_filtro = []
-            anos_filtro = []
+    setores_filtro = st.multiselect("Setor", options=sorted(df["Setor"].dropna().unique()), default=[])
+    anos_filtro = st.multiselect("Ano de Vencimento", options=sorted(df["Ano_Venc"].dropna().unique()), default=[])
 
     df_filt = df.copy()
     if setores_filtro:
@@ -68,90 +64,76 @@ with tab1:
 
     st.subheader("📈 Spread ANBIMA (bps) vs Duration")
     df_plot = df_filt.dropna(subset=["Duration", "Spread_bps", "Setor"])
-    if df_plot.empty:
-        st.warning("⚠️ Nenhum dado disponível para o gráfico com os filtros atuais.")
-    else:
-        fig = px.scatter(
-            df_plot,
-            x="Duration",
-            y="Spread_bps",
-            color="Setor",
-            hover_data=["Código", "Emissor", "PU", "Vencimento"],
-            title="Spread ANBIMA vs Duration",
-            labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"},
-            height=800
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    st.subheader("🏆 Top 10 maiores spreads")
-    st.dataframe(preparar_tabela(df_filt.sort_values("ANBIMA_pct", ascending=False).head(10)), use_container_width=True)
-
-    st.subheader("📉 Top 10 menores spreads")
-    st.dataframe(preparar_tabela(df_filt.sort_values("ANBIMA_pct", ascending=True).head(10)), use_container_width=True)
+    fig = px.scatter(
+        df_plot,
+        x="Duration",
+        y="Spread_bps",
+        color="Setor",
+        hover_data=["Código", "Emissor", "PU", "Vencimento"],
+        title="Spread ANBIMA vs Duration",
+        labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"},
+        height=800
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("📋 Tabela Completa de Debêntures")
-    st.dataframe(preparar_tabela(df_filt.sort_values("Vencimento")), use_container_width=True)
-
-    csv = df_filt.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Baixar CSV com dados filtrados", data=csv, file_name="debentures_filtradas.csv", mime='text/csv')
+    tabela_geral = preparar_tabela(df_filt.sort_values("Vencimento"))
+    st.dataframe(tabela_geral, use_container_width=True)
 
 # === EMISSORES ===
 with tab2:
     st.subheader("🏦 Curva do Emissor Selecionado")
-    emissor_sel = st.selectbox("🔎 Selecione um Emissor", sorted(df["Emissor"].dropna().unique()))
-    df_emissor = df[df["Emissor"] == emissor_sel].dropna(subset=["Duration", "Spread_bps"])
+    emissores = sorted(df["Emissor"].dropna().unique())
+    default_index = emissores.index("Localiza") if "Localiza" in emissores else 0
+    emissor_sel = st.selectbox("🔎 Selecione um Emissor", emissores, index=default_index)
 
-    if df_emissor.empty or len(df_emissor) < 2:
-        st.warning("Este emissor não possui dados suficientes para visualização.")
-    else:
-        df_emissor = df_emissor.sort_values("Duration")
-        fig = go.Figure()
-        symbols = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down',
-                   'star', 'hexagram', 'hourglass', 'bowtie', 'pentagon']
-        for i, (index, row) in enumerate(df_emissor.iterrows()):
-            fig.add_trace(go.Scatter(
-                x=[row["Duration"]],
-                y=[row["Spread_bps"]],
-                mode="markers+text",
-                marker_symbol=symbols[i % len(symbols)],
-                marker=dict(size=12),
-                text=[row["Código"]],
-                name=row["Código"],
-                textposition="top center"
-            ))
+    df_emissor = df[df["Emissor"] == emissor_sel].dropna(subset=["Duration", "Spread_bps"]).sort_values("Duration")
+    fig_emissor = go.Figure()
+    symbols = ['circle', 'square', 'diamond', 'cross', 'x', 'triangle-up', 'triangle-down',
+               'star', 'hexagram', 'hourglass', 'bowtie', 'pentagon']
+    for i, (index, row) in enumerate(df_emissor.iterrows()):
+        fig_emissor.add_trace(go.Scatter(
+            x=[row["Duration"]],
+            y=[row["Spread_bps"]],
+            mode="markers+text",
+            marker_symbol=symbols[i % len(symbols)],
+            marker=dict(size=12),
+            text=[row["Código"]],
+            name=row["Código"],
+            textposition="top center"
+        ))
 
-        def curva_exp(x, a, b, c):
-            return a * np.exp(-b * x) + c
+    def curva_exp(x, a, b, c):
+        return a * np.exp(-b * x) + c
 
-        try:
-            durations = df_emissor["Duration"].values
-            spreads = df_emissor["Spread_bps"].values
-            popt, _ = curve_fit(curva_exp, durations, spreads, maxfev=10000)
-            x_model = np.linspace(min(durations), max(durations), 100)
-            y_model = curva_exp(x_model, *popt)
-            fig.add_trace(go.Scatter(
-                x=x_model,
-                y=y_model,
-                mode="lines",
-                name="Curva Interpolada",
-                line=dict(color=interpol_color, dash='dash')
-            ))
-        except Exception:
-            st.info("⚠️ Curva não ajustada — verifique dispersão dos dados.")
+    try:
+        durations = df_emissor["Duration"].values
+        spreads = df_emissor["Spread_bps"].values
+        popt, _ = curve_fit(curva_exp, durations, spreads, maxfev=10000)
+        x_model = np.linspace(min(durations), max(durations), 100)
+        y_model = curva_exp(x_model, *popt)
+        fig_emissor.add_trace(go.Scatter(
+            x=x_model,
+            y=y_model,
+            mode="lines",
+            name="Curva Interpolada",
+            line=dict(color=interpol_color, dash='dash')
+        ))
+    except Exception:
+        st.info("⚠️ Curva não ajustada — verifique dispersão dos dados.")
 
-        fig.update_layout(
-            title=f"Curva do Emissor: {emissor_sel}",
-            xaxis_title="Duration (anos)",
-            yaxis_title="Spread (bps)",
-            height=600,
-            legend_title="Código"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    fig_emissor.update_layout(
+        title=f"Curva do Emissor: {emissor_sel}",
+        xaxis_title="Duration (anos)",
+        yaxis_title="Spread (bps)",
+        height=600,
+        legend_title="Código"
+    )
+    st.plotly_chart(fig_emissor, use_container_width=True)
 
 # === SETORIAL ===
 with tab3:
     st.subheader("📊 Média de Spread por Setor")
-
     spread_por_setor = (
         df.groupby("Setor")["ANBIMA_pct"]
         .mean()
@@ -159,14 +141,6 @@ with tab3:
         .sort_values("ANBIMA_pct", ascending=False)
     )
 
-    st.markdown("### 📋 Tabela")
-    st.dataframe(
-        spread_por_setor.rename(columns={"ANBIMA_pct": "Spread Médio (%)"}),
-        use_container_width=True,
-        height=600
-    )
-
-    st.markdown("### 📈 Gráfico de Barras")
     fig_bar = px.bar(
         spread_por_setor,
         x="ANBIMA_pct",
@@ -177,3 +151,34 @@ with tab3:
         height=800
     )
     st.plotly_chart(fig_bar, use_container_width=True)
+
+# === EXPORTAÇÃO ===
+with tab4:
+    st.subheader("📤 Exportar Visões")
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Base Completa')
+        preparar_tabela(df).to_excel(writer, index=False, sheet_name='Formatado')
+        spread_por_setor.to_excel(writer, index=False, sheet_name='Setorial')
+        df[df["Emissor"] == emissor_sel].to_excel(writer, index=False, sheet_name='Emissor')
+        writer.close()
+
+    st.download_button(
+        label="📊 Baixar Excel Completo",
+        data=buffer,
+        file_name="reag_monitor_debentures.xlsx",
+        mime="application/vnd.ms-excel"
+    )
+
+    st.download_button("📷 Baixar Gráfico Emissor (PNG)",
+                       data=fig_emissor.to_image(format="png"),
+                       file_name="grafico_emissor.png")
+
+    st.download_button("📷 Baixar Gráfico Setorial (PNG)",
+                       data=fig_bar.to_image(format="png"),
+                       file_name="grafico_setorial.png")
+
+    st.download_button("📷 Baixar Gráfico Geral (PNG)",
+                       data=fig.to_image(format="png"),
+                       file_name="grafico_geral.png")
