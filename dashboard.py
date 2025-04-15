@@ -47,12 +47,6 @@ def preparar_tabela(df_input):
     df_show["ANBIMA"] = df_show["ANBIMA_pct"].map("{:.2f}%".format)
     return df_show[["Código", "Emissor", "Setor", "Duration", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]]
 
-def export_plot_as_png(fig, filename):
-    png_bytes = fig.to_image(format="png")
-    b64 = base64.b64encode(png_bytes).decode()
-    st.markdown(f"📷 [Baixar gráfico como PNG]("
-                f"data:image/png;base64,{b64})", unsafe_allow_html=True)
-
 # === VISÃO GERAL ===
 with tab1:
     st.header("📈 Visão Geral")
@@ -78,7 +72,6 @@ with tab1:
         height=800
     )
     st.plotly_chart(fig, use_container_width=True)
-    export_plot_as_png(fig, "grafico_geral")
 
     st.subheader("📋 Tabela de Debêntures")
     tabela_geral = preparar_tabela(df_filt.sort_values("Vencimento"))
@@ -89,7 +82,7 @@ with tab2:
     st.header("🏦 Curva por Emissor")
 
     emissores = sorted(df["Emissor"].dropna().unique())
-    localiza_index = next((i for i, e in enumerate(emissores) if "Localiza Rent" in e), 0)
+    localiza_index = next((i for i, e in enumerate(emissores) if "Localiza Rent a Car" in e), 0)
     emissor_sel = st.selectbox("Selecione o emissor", emissores, index=localiza_index)
 
     df_emissor = df[df["Emissor"] == emissor_sel].dropna(subset=["Duration", "Spread_bps"]).sort_values("Duration")
@@ -135,7 +128,6 @@ with tab2:
         height=600
     )
     st.plotly_chart(fig_emissor, use_container_width=True)
-    export_plot_as_png(fig_emissor, "grafico_emissor")
 
 # === SETORIAL ===
 with tab3:
@@ -158,4 +150,3 @@ with tab3:
         height=800
     )
     st.plotly_chart(fig_bar, use_container_width=True)
-    export_plot_as_png(fig_bar, "grafico_setorial")
