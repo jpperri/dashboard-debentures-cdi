@@ -9,3 +9,4 @@ kaleido
 xlsxwriter
 pdfdocument
 matplotlib
+fpdf
