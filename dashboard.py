@@ -2,47 +2,52 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
-# Carregando dados
-df = pd.read_excel("Deb CDI+.xlsx")
+st.set_page_config(page_title="Debêntures CDI+", layout="wide")
 
-# Tratamento
-df['Spread_bps'] = df['ANBIMA'] * 10000
+# --- Carregar dados ---
+@st.cache_data
+def load_data():
+    return pd.read_excel("Deb CDI+.xlsx", engine="openpyxl")
+
+df = load_data()
+
+# --- Tratamento ---
+df['Spread_bps'] = pd.to_numeric(df['ANBIMA'], errors='coerce') * 10000
 df['Duration'] = pd.to_numeric(df['Duration'], errors='coerce')
+df['Setor'] = df['Setor'].fillna("Não informado")
 
-st.title("📈 Dashboard de Debêntures CDI+")
+# --- Título ---
+st.title("📊 Dashboard de Debêntures CDI+")
 
-# Filtros
-setores = st.multiselect("Filtrar por Setor", df["Setor"].unique(), default=list(df["Setor"].unique()))
+# --- Filtros interativos ---
+setores = st.multiselect(
+    "Filtrar por Setor", 
+    options=df["Setor"].unique(), 
+    default=list(df["Setor"].unique())
+)
+
 df = df[df["Setor"].isin(setores)]
 
-# Filtrar dados válidos antes do gráfico
-df_validos = df.dropna(subset=["Duration", "Spread_bps"])
+# --- Gráfico Scatter (com validação de dados) ---
+df_plot = df.dropna(subset=["Duration", "Spread_bps", "Setor"])
 
-fig = px.scatter(
-    df_validos,
-    x="Duration",
-    y="Spread_bps",
-    color="Setor",
-    hover_data=["Codigo", "Emissor", "PU", "Vencimento"],
-    title="Spread ANBIMA vs. Duration"
-)
-st.plotly_chart(fig)
-
-if df_validos.empty:
-    st.warning("⚠️ Nenhum dado disponível para os filtros selecionados.")
+if df_plot.empty:
+    st.warning("⚠️ Nenhum dado disponível para os filtros atuais.")
 else:
-    fig = px.scatter(...)
-    st.plotly_chart(fig)
+    fig = px.scatter(
+        df_plot,
+        x="Duration",
+        y="Spread_bps",
+        color="Setor",
+        hover_data=["Codigo", "Emissor", "PU", "Vencimento"],
+        title="Spread ANBIMA vs. Duration",
+        labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"}
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-
-# Gráfico principal
-fig = px.scatter(
-    df, x="Duration", y="Spread_bps", color="Setor",
-    hover_data=["Codigo", "Emissor", "PU", "Vencimento"],
-    title="Spread ANBIMA vs. Duration"
+# --- Tabela com dados filtrados ---
+st.markdown("### 📋 Tabela de Debêntures")
+st.dataframe(
+    df[["Codigo", "Emissor", "Setor", "Duration", "Spread_bps", "PU", "Vencimento"]],
+    use_container_width=True
 )
-st.plotly_chart(fig)
-
-# Tabela
-st.markdown("### 🔎 Tabela de Debêntures")
-st.dataframe(df)
