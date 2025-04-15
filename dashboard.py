@@ -36,7 +36,10 @@ interpol_color = "white" if is_dark else "black"
 
 st.title("📊 REAG Crédito - Monitor de Debêntures CDI+")
 
-tab1, tab2, tab3 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial"])
+import matplotlib.pyplot as plt
+from pdfdocument.document import PDFDocument
+
+tab1, tab2, tab3, tab4 = st.tabs(["📈 Visão Geral", "🏦 Emissores", "🏭 Setorial", "📄 Relatório Executivo"])
 
 # === Funções utilitárias ===
 def preparar_tabela(df_input):
@@ -48,11 +51,31 @@ def preparar_tabela(df_input):
     return df_show[["Código", "Emissor", "Setor", "Duration", "BID", "OFFER", "ANBIMA", "PU", "Vencimento"]]
 
 # === VISÃO GERAL ===
+# === VISÃO GERAL ===
 with tab1:
     st.header("📈 Visão Geral")
 
-    setores_filtro = st.multiselect("Setor", options=sorted(df["Setor"].dropna().unique()), default=[])
-    anos_filtro = st.multiselect("Ano de Vencimento", options=sorted(df["Ano_Venc"].dropna().unique()), default=[])
+    # Estatísticas principais
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("📄 Total Debêntures", len(df))
+    col2.metric("📈 Spread Médio (bps)", f"{df['Spread_bps'].mean():.1f}")
+    col3.metric("⏳ Duration Média (anos)", f"{df['Duration'].mean():.2f}")
+    col4.metric("📅 Último Vencimento", df["Vencimento"].max().strftime("%d/%m/%Y"))
+
+    # Top 3 maiores e menores spreads
+    st.subheader("🏅 Destaques de Spread")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 🔝 Top 3 Maiores Spreads")
+        st.dataframe(preparar_tabela(df.sort_values("Spread_bps", ascending=False).head(3)), use_container_width=True)
+    with col2:
+        st.markdown("### 🔻 Top 3 Menores Spreads")
+        st.dataframe(preparar_tabela(df.sort_values("Spread_bps", ascending=True).head(3)), use_container_width=True)
+
+    # Filtros
+    st.subheader("🎛 Filtros")
+    setores_filtro = st.multiselect("Setor", sorted(df["Setor"].dropna().unique()), default=[])
+    anos_filtro = st.multiselect("Ano de Vencimento", sorted(df["Ano_Venc"].dropna().unique()), default=[])
 
     df_filt = df.copy()
     if setores_filtro:
@@ -60,7 +83,8 @@ with tab1:
     if anos_filtro:
         df_filt = df_filt[df_filt["Ano_Venc"].isin(anos_filtro)]
 
-    st.subheader("Gráfico de Spread vs Duration")
+    # Gráfico
+    st.subheader("📈 Spread ANBIMA (bps) vs Duration")
     df_plot = df_filt.dropna(subset=["Duration", "Spread_bps", "Setor"])
     fig = px.scatter(
         df_plot,
@@ -68,14 +92,22 @@ with tab1:
         y="Spread_bps",
         color="Setor",
         hover_data=["Código", "Emissor", "PU", "Vencimento"],
-        labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"},
-        height=800
+        height=800,
+        labels={"Duration": "Duration (anos)", "Spread_bps": "Spread (bps)"}
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("📋 Tabela de Debêntures")
-    tabela_geral = preparar_tabela(df_filt.sort_values("Vencimento"))
-    st.dataframe(tabela_geral, use_container_width=True)
+    # Top 10 tabelas
+    st.subheader("📊 Top 10 Maiores Spreads")
+    st.dataframe(preparar_tabela(df_filt.sort_values("Spread_bps", ascending=False).head(10)), use_container_width=True)
+
+    st.subheader("📉 Top 10 Menores Spreads")
+    st.dataframe(preparar_tabela(df_filt.sort_values("Spread_bps", ascending=True).head(10)), use_container_width=True)
+
+    # Tabela final
+    st.subheader("📋 Tabela Completa de Debêntures")
+    st.dataframe(preparar_tabela(df_filt.sort_values("Vencimento")), use_container_width=True)
+
 
 # === EMISSORES ===
 with tab2:
@@ -150,3 +182,48 @@ with tab3:
         height=800
     )
     st.plotly_chart(fig_bar, use_container_width=True)
+with tab4:
+    st.header("📄 Relatório Executivo - Visão Geral")
+
+    buffer = io.BytesIO()
+    pdf = PDFDocument(buffer)
+    pdf.init_report()
+
+    pdf.h1("REAG Crédito - Monitor de Debêntures CDI+")
+    pdf.hr()
+
+    # Estatísticas
+    pdf.h2("Estatísticas Gerais")
+    pdf.p(f"Total de Debêntures: {len(df)}")
+    pdf.p(f"Spread Médio: {df['Spread_bps'].mean():.1f} bps")
+    pdf.p(f"Duration Média: {df['Duration'].mean():.2f} anos")
+    pdf.p(f"Último Vencimento: {df['Vencimento'].max().strftime('%d/%m/%Y')}")
+
+    # Top 3
+    pdf.h2("Top 3 Maiores Spreads")
+    for _, row in df.sort_values("Spread_bps", ascending=False).head(3).iterrows():
+        pdf.p(f"{row['Código']} - {row['Emissor']} - {row['Spread_bps']:.0f} bps")
+
+    pdf.h2("Top 3 Menores Spreads")
+    for _, row in df.sort_values("Spread_bps", ascending=True).head(3).iterrows():
+        pdf.p(f"{row['Código']} - {row['Emissor']} - {row['Spread_bps']:.0f} bps")
+
+    # Gráfico resumido
+    pdf.h2("Gráfico de Dispersão")
+    fig, ax = plt.subplots(figsize=(6, 4))
+    sample = df.dropna(subset=["Duration", "Spread_bps"])
+    ax.scatter(sample["Duration"], sample["Spread_bps"], alpha=0.6)
+    ax.set_title("Spread vs Duration")
+    ax.set_xlabel("Duration (anos)")
+    ax.set_ylabel("Spread (bps)")
+    pdf.figure(fig)
+    plt.close(fig)
+
+    pdf.generate()
+
+    st.download_button(
+        label="📄 Baixar Relatório PDF",
+        data=buffer.getvalue(),
+        file_name="Relatorio_Executivo_REAG.pdf",
+        mime="application/pdf"
+    )
