@@ -7,3 +7,5 @@ numpy
 Pillow
 kaleido
 xlsxwriter
+pdfdocument
+matplotlib
