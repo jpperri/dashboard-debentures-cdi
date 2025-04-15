@@ -6,3 +6,4 @@ scipy
 numpy
 Pillow
 kaleido
+xlsxwriter
