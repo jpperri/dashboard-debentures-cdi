@@ -11,7 +11,7 @@ import base64
 st.set_page_config(page_title="REAG Crédito - Monitor de Debêntures CDI+", layout="wide")
 
 # === Cabeçalho visual com redimensionamento ===
-image = Image.open("Cabecalho de relatorios.png")
+image = Image.open("logopage.png")
 resized_image = image.resize((image.width // 2, image.height // 2))
 st.image(resized_image, use_container_width=True)
 
