@@ -11,29 +11,31 @@ def load_data():
 
 df = load_data()
 
-# --- Tratamento ---
-df['Spread_bps'] = pd.to_numeric(df['ANBIMA'], errors='coerce') * 10000
-df['Duration'] = pd.to_numeric(df['Duration'], errors='coerce')
-df['Setor'] = df['Setor'].fillna("Não informado")
+# --- Tratamento de dados ---
+df['Spread_bps'] = pd.to_numeric(df.get('ANBIMA'), errors='coerce') * 10000
+df['Duration'] = pd.to_numeric(df.get('Duration'), errors='coerce')
+df['Setor'] = df.get('Setor').fillna("Não informado")
+df['PU'] = pd.to_numeric(df.get('PU'), errors='coerce')
 
 # --- Título ---
 st.title("📊 Dashboard de Debêntures CDI+")
 
-# --- Filtros interativos ---
+# --- Filtros ---
 setores = st.multiselect(
-    "Filtrar por Setor", 
-    options=df["Setor"].unique(), 
+    "Filtrar por Setor",
+    options=df["Setor"].unique(),
     default=list(df["Setor"].unique())
 )
-
 df = df[df["Setor"].isin(setores)]
 
-# --- Gráfico Scatter (com validação de dados) ---
-df_plot = df.dropna(subset=["Duration", "Spread_bps", "Setor"])
+# --- Gráfico com validações ---
+st.markdown("## 🎯 Spread vs Duration")
 
-if df_plot.empty:
-    st.warning("⚠️ Nenhum dado disponível para os filtros atuais.")
+# Verifica se colunas necessárias existem e não estão vazias
+if df[["Duration", "Spread_bps", "Setor"]].dropna().empty:
+    st.warning("⚠️ Nenhum dado válido disponível para o gráfico.")
 else:
+    df_plot = df.dropna(subset=["Duration", "Spread_bps", "Setor"])
     fig = px.scatter(
         df_plot,
         x="Duration",
@@ -45,9 +47,9 @@ else:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# --- Tabela com dados filtrados ---
-st.markdown("### 📋 Tabela de Debêntures")
+# --- Tabela final ---
+st.markdown("## 📋 Tabela de Debêntures")
 st.dataframe(
-    df[["Codigo", "Emissor", "Setor", "Duration", "Spread_bps", "PU", "Vencimento"]],
+    df[["Codigo", "Emissor", "Setor", "Duration", "Spread_bps", "PU", "Vencimento"]].dropna(how='all'),
     use_container_width=True
 )
