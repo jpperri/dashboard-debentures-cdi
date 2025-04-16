@@ -12,7 +12,7 @@ st.set_page_config(page_title="REAG Crédito - Monitor de Debêntures CDI+", lay
 
 # === Cabeçalho visual com redimensionamento ===
 image = Image.open("logopage.png")
-resized_image = image.resize((image.width // 2, image.height // 2))
+resized_image = image.resize((image.width // 3, image.height // 3))
 st.image(resized_image, use_container_width=True)
 
 # === Carregamento de dados ===
@@ -150,7 +150,7 @@ with tab2:
             line=dict(color=interpol_color, dash='dash')
         ))
     except Exception:
-        st.info("⚠️ Curva não ajustada — dados insuficientes.")
+        st.info("⚠️ Emissor sem emissões suficientes para uma curva interpolada.")
 
     fig_emissor.update_layout(
         title=f"Curva do Emissor: {emissor_sel}",
